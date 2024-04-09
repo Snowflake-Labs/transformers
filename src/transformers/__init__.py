@@ -613,6 +613,7 @@ _import_structure = {
     ],
     "models.mistral": ["MISTRAL_PRETRAINED_CONFIG_ARCHIVE_MAP", "MistralConfig"],
     "models.mixtral": ["MIXTRAL_PRETRAINED_CONFIG_ARCHIVE_MAP", "MixtralConfig"],
+    "models.yak": ["YakConfig"],
     "models.mluke": [],
     "models.mobilebert": [
         "MOBILEBERT_PRETRAINED_CONFIG_ARCHIVE_MAP",
@@ -3805,6 +3806,9 @@ else:
             "XmodPreTrainedModel",
         ]
     )
+    _import_structure["models.yak"].extend(
+        ["YakTokenizer"]
+     )
     _import_structure["models.yolos"].extend(
         [
             "YOLOS_PRETRAINED_MODEL_ARCHIVE_LIST",
