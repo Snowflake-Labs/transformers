@@ -32,6 +32,7 @@ logger = logging.get_logger(__name__)
 
 
 def is_deepspeed_available():
+    return False
     package_exists = importlib.util.find_spec("deepspeed") is not None
 
     # Check we're not importing a "deepspeed" directory somewhere but the actual library by trying to grab the version

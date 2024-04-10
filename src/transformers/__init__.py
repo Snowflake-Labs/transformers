@@ -613,7 +613,7 @@ _import_structure = {
     ],
     "models.mistral": ["MISTRAL_PRETRAINED_CONFIG_ARCHIVE_MAP", "MistralConfig"],
     "models.mixtral": ["MIXTRAL_PRETRAINED_CONFIG_ARCHIVE_MAP", "MixtralConfig"],
-    "models.yak": ["YakConfig"],
+    "models.yak": ["YAK_PRETRAINED_CONFIG_ARCHIVE_MAP", "YakConfig"],
     "models.mluke": [],
     "models.mobilebert": [
         "MOBILEBERT_PRETRAINED_CONFIG_ARCHIVE_MAP",
@@ -5864,6 +5864,7 @@ if TYPE_CHECKING:
     )
     from .models.xlnet import XLNET_PRETRAINED_CONFIG_ARCHIVE_MAP, XLNetConfig
     from .models.xmod import XMOD_PRETRAINED_CONFIG_ARCHIVE_MAP, XmodConfig
+    from .models.yak import YAK_PRETRAINED_CONFIG_ARCHIVE_MAP, YakConfig
     from .models.yolos import YOLOS_PRETRAINED_CONFIG_ARCHIVE_MAP, YolosConfig
     from .models.yoso import YOSO_PRETRAINED_CONFIG_ARCHIVE_MAP, YosoConfig
 

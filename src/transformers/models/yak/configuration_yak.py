@@ -1,4 +1,4 @@
-# copyright 2023 Snowflake AI and the HuggingFace Inc. team. All rights reserved.
+# Copyright 2023 Snowflake AI and the HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -147,16 +147,13 @@ class YakConfig(PretrainedConfig):
         num_local_experts=8,
         router_aux_loss_coef=0.001,
         moe_layer_frequency=2,
-        tp_size=1,
-        use_residual=False,
+        parallel_attn_mlp_res=False,
         moe_train_capacity_factor=1,
         moe_eval_capacity_factor=1,
         enable_expert_tensor_parallelism=False,
         moe_min_capacity=0,
         moe_token_dropping=True,
-        # parallel_attn_mlp_res=False,
         quantization=None,
-        lora=None,
         **kwargs,
     ):
         self.vocab_size = vocab_size
@@ -183,23 +180,16 @@ class YakConfig(PretrainedConfig):
         self.num_local_experts = num_local_experts
         self.router_aux_loss_coef = router_aux_loss_coef
         self.moe_layer_frequency = moe_layer_frequency
-        self.tp_size = tp_size
-        self.use_residual = use_residual
         self.moe_train_capacity_factor = moe_train_capacity_factor
         self.moe_eval_capacity_factor = moe_eval_capacity_factor
         self.enable_expert_tensor_parallelism = enable_expert_tensor_parallelism
         self.moe_min_capacity = moe_min_capacity
         self.moe_token_dropping = moe_token_dropping
-
+        self.parallel_attn_mlp_res = parallel_attn_mlp_res
         if isinstance(quantization, dict):
             self.quantization = YakQuantizationConfig(**quantization)
         else:
             self.quantization = quantization
-
-        if isinstance(lora, dict):
-            self.lora = YakLoraConfig(**lora)
-        else:
-            self.lora = lora
 
         super().__init__(
             pad_token_id=pad_token_id,
@@ -218,14 +208,10 @@ class YakConfig(PretrainedConfig):
             config = result
         if isinstance(config.quantization, dict):
             config.quantization = YakQuantizationConfig(**config.quantization)
-        if isinstance(config.lora, dict):
-            config.lora = YakLoraConfig(**config.lora)
         return result
 
     def to_dict(self) -> Dict[str, Any]:
         ret = super().to_dict()
         if isinstance(ret["quantization"], YakQuantizationConfig):
             ret["quantization"] = asdict(ret["quantization"])
-        if isinstance(ret["lora"], YakLoraConfig):
-            ret["lora"] = asdict(ret["lora"])
         return ret
