@@ -328,7 +328,7 @@ class YakAttention(nn.Module):
                                      ds_optimized_quantization_config=deepspeed_quantization, 
                                      ds_optimized_base_weight_sharding=True,
                                      dtype=torch.bfloat16)
-        self.v_proj = get_yak_linear(self.hidden_size, self.num_key_value_head * self.head_dim, bias=False,
+        self.v_proj = get_yak_linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False,
                                      ds_optimized_lora_config=deepspeed_lora_config, 
                                      ds_optimized_quantization_config=deepspeed_quantization, 
                                      ds_optimized_base_weight_sharding=True,
