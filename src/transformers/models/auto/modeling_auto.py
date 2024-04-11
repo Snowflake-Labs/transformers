@@ -253,6 +253,7 @@ MODEL_MAPPING_NAMES = OrderedDict(
         ("xlm-roberta-xl", "XLMRobertaXLModel"),
         ("xlnet", "XLNetModel"),
         ("xmod", "XmodModel"),
+        ("yak", "YakModel"),
         ("yolos", "YolosModel"),
         ("yoso", "YosoModel"),
     ]
@@ -489,6 +490,7 @@ MODEL_FOR_CAUSAL_LM_MAPPING_NAMES = OrderedDict(
         ("xlm-roberta-xl", "XLMRobertaXLForCausalLM"),
         ("xlnet", "XLNetLMHeadModel"),
         ("xmod", "XmodForCausalLM"),
+        ("yak", "YakForCausalLM"),
     ]
 )
 
@@ -893,6 +895,7 @@ MODEL_FOR_SEQUENCE_CLASSIFICATION_MAPPING_NAMES = OrderedDict(
         ("xlnet", "XLNetForSequenceClassification"),
         ("xmod", "XmodForSequenceClassification"),
         ("yoso", "YosoForSequenceClassification"),
+        ("yak", "YakForSequenceClassification"),         
     ]
 )
 
