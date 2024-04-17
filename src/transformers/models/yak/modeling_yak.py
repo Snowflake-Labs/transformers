@@ -310,6 +310,7 @@ class YakAttention(nn.Module):
         self.rope_theta = config.rope_theta
         self.is_causal = True
         self.attention_dropout = config.attention_dropout
+        self.use_deepspeed_implementation = USE_DEEPSPEED_MOE_ARG in kwargs and kwargs[USE_DEEPSPEED_MOE_ARG]
         if (self.head_dim * self.num_heads) != self.hidden_size:
             raise ValueError(
                 f"hidden_size must be divisible by num_heads (got `hidden_size`: {self.hidden_size}"
@@ -319,21 +320,25 @@ class YakAttention(nn.Module):
         deepspeed_quantization = kwargs.get(DEEPSPEED_QUANTIZATION_CONFIG)
         deepspeed_lora_config = kwargs.get(DEEPSPEED_LORA_CONFIG)
         self.q_proj = get_yak_linear(self.hidden_size, self.num_heads * self.head_dim, bias=False,
+                                     use_deepspeed_implementation=self.use_deepspeed_implementation,
                                      ds_optimized_lora_config=deepspeed_lora_config, 
                                      ds_optimized_quantization_config=deepspeed_quantization, 
                                      ds_optimized_base_weight_sharding=True,
                                      dtype=torch.bfloat16)
         self.k_proj = get_yak_linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False,
+                                     use_deepspeed_implementation=self.use_deepspeed_implementation,                                     
                                      ds_optimized_lora_config=deepspeed_lora_config, 
                                      ds_optimized_quantization_config=deepspeed_quantization, 
                                      ds_optimized_base_weight_sharding=True,
                                      dtype=torch.bfloat16)
         self.v_proj = get_yak_linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False,
+                                     use_deepspeed_implementation=self.use_deepspeed_implementation,
                                      ds_optimized_lora_config=deepspeed_lora_config, 
                                      ds_optimized_quantization_config=deepspeed_quantization, 
                                      ds_optimized_base_weight_sharding=True,
                                      dtype=torch.bfloat16)
         self.o_proj = get_yak_linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False,
+                                     use_deepspeed_implementation=self.use_deepspeed_implementation,
                                      ds_optimized_lora_config=deepspeed_lora_config, 
                                      ds_optimized_quantization_config=deepspeed_quantization, 
                                      ds_optimized_base_weight_sharding=True,
@@ -727,6 +732,7 @@ class YakFlashAttention2(YakAttention):
 def get_yak_linear(input_dim, 
                    output_dim, 
                    bias=False,
+                   use_deepspeed_implementation=False,
                    ds_optimized_lora_config=None, 
                    ds_optimized_quantization_config=None, 
                    ds_optimized_base_weight_sharding=False,
@@ -739,7 +745,7 @@ def get_yak_linear(input_dim,
         ds_optimized_base_weight_sharding: bool. If true, the base weight for lora (provided ds_optimized_lora_config is not None) will be sharded across all available gpus
         in a tensor parallel way.
     """
-    if is_deepspeed_available():
+    if is_deepspeed_available() and use_deepspeed_implementation:
         if ds_optimized_lora_config is not None:
             ds_optimized_lora_config: ds_linear.LoRAConfig = copy.deepcopy(ds_optimized_lora_config)
             ds_optimized_lora_config.base_weight_sharding = torch.distributed.get_world_size() if ds_optimized_base_weight_sharding else 1
@@ -844,6 +850,7 @@ MIXTRAL_ATTENTION_CLASSES = {
 
 class YakMLP(nn.Module):
     def __init__(self, config: YakConfig, 
+                 use_deepspeed_implementation=False,
                  ds_optimized_lora_config=None,
                  ds_optimized_quantization_config=None,
                  shard_base_weights_if_doing_lora=False, 
@@ -860,16 +867,19 @@ class YakMLP(nn.Module):
         self.hidden_dim = config.hidden_size
         self.ffn_dim = config.intermediate_size if not is_residual_mlp else self.hidden_dim  
         self.w1 = get_yak_linear(self.hidden_dim, self.ffn_dim, False,
+                                 use_deepspeed_implementation=use_deepspeed_implementation,
                                  ds_optimized_lora_config=ds_optimized_lora_config, 
                                  ds_optimized_quantization_config=ds_optimized_quantization_config, 
                                  ds_optimized_base_weight_sharding=shard_base_weights_if_doing_lora,
                                  dtype=torch.bfloat16)
         self.w2 = get_yak_linear(self.ffn_dim, self.hidden_dim, False,
+                                 use_deepspeed_implementation=use_deepspeed_implementation,                                 
                                  ds_optimized_lora_config=ds_optimized_lora_config, 
                                  ds_optimized_quantization_config=ds_optimized_quantization_config, 
                                  ds_optimized_base_weight_sharding=shard_base_weights_if_doing_lora,
                                  dtype=torch.bfloat16)
         self.w3 = get_yak_linear(self.hidden_dim, self.ffn_dim, False,
+                                 use_deepspeed_implementation=use_deepspeed_implementation,                                 
                                  ds_optimized_lora_config=ds_optimized_lora_config, 
                                  ds_optimized_quantization_config=ds_optimized_quantization_config, 
                                  ds_optimized_base_weight_sharding=shard_base_weights_if_doing_lora,
@@ -892,13 +902,17 @@ class YakMoE(nn.Module):
         self.top_k = config.num_experts_per_tok
         self.is_moe_layer = (layer_id+1) % config.moe_layer_frequency == 0
 
-        self.use_deepspeed_moe = USE_DEEPSPEED_MOE_ARG in kwargs and kwargs[USE_DEEPSPEED_MOE_ARG]
-        if self.use_deepspeed_moe and MoE is None:
+        self.use_deepspeed_implementation = USE_DEEPSPEED_MOE_ARG in kwargs and kwargs[USE_DEEPSPEED_MOE_ARG]
+        if self.use_deepspeed_implementation and MoE is None:
             raise ValueError("Deepspeed is not installed")
         deepspeed_quantization = kwargs.get(DEEPSPEED_QUANTIZATION_CONFIG)
         deepspeed_lora = kwargs.get(DEEPSPEED_LORA_CONFIG)
+
+        self.use_deepspeed_moe = False
+
         if not self.is_moe_layer: # dense, not MoE
             self.mlp = YakMLP(config,
+                              use_deepspeed_implementation=self.use_deepspeed_implementation,
                               ds_optimized_quantization_config=deepspeed_quantization,
                               ds_optimized_lora_config=deepspeed_lora,
                               shard_base_weights_if_doing_lora=True)
@@ -908,7 +922,8 @@ class YakMoE(nn.Module):
                 self.mlp = MoE(self.hidden_dim,
                                 # base weight sharding false for all deepspeed moe calls because it is already sharded
                                 YakMLP(config, 
-                                       ds_optimized_quantization_config=deepspeed_quantization,
+                                       use_deepspeed_implementation=True,
+                                       ds_optimized_quantization_config=self.use_deepspeed_implementation,
                                        ds_optimized_lora_config=deepspeed_lora,
                                        shard_base_weights_if_doing_lora=False),
                                 num_experts=config.num_local_experts,
@@ -925,6 +940,7 @@ class YakMoE(nn.Module):
                 # "local" MoE implementation
                 self.gate = nn.Linear(self.hidden_dim, self.num_experts, bias=False)
                 self.experts = nn.ModuleList([YakMLP(config,
+                                                     use_deepspeed_implementation=self.use_deepspeed_implementation,                                       
                                                      ds_optimized_quantization_config=deepspeed_quantization,
                                                      ds_optimized_lora_config=deepspeed_lora,
                                                      shard_base_weights_if_doing_lora=True) for i in range(self.num_experts)])
@@ -1004,6 +1020,7 @@ class YakDecoderLayer(nn.Module):
         self.block_sparse_moe = YakMoE(config, layer_id=layer_idx, **kwargs)
         self.input_layernorm = YakRMSNorm(config.hidden_size, eps=config.rms_norm_eps) 
         self.post_attention_layernorm = YakRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.use_deepspeed_implementation = USE_DEEPSPEED_MOE_ARG in kwargs and kwargs[USE_DEEPSPEED_MOE_ARG]
 
         self.parallel_attn_mlp_res = config.parallel_attn_mlp_res and self.block_sparse_moe.is_moe_layer # add residual only when it is moe layer
         deepspeed_quantization = kwargs.get(DEEPSPEED_QUANTIZATION_CONFIG)
@@ -1011,6 +1028,7 @@ class YakDecoderLayer(nn.Module):
         if self.parallel_attn_mlp_res:
             self.residual_layernorm = YakRMSNorm(config.hidden_size, eps=config.rms_norm_eps) 
             self.residual_mlp =  YakMLP(config,
+                                        use_deepspeed_implementation=self.use_deepspeed_implementation,
                                         is_residual_mlp=True,
                                         ds_optimized_quantization_config=deepspeed_quantization,
                                         ds_optimized_lora_config=deepspeed_lora,
@@ -1703,8 +1721,12 @@ class YakForCausalLM(YakPreTrainedModel):
         if labels is not None:
             loss += self.router_aux_loss_coef * aux_loss
 
+        # if torch.distributed.get_rank() == 0:
+        #     import pdb; pdb.set_trace()
+        # torch.distributed.barrier()
         if not return_dict:
             output = (logits,) + outputs[1:]
+            # torch.distributed.barrier()
             return (loss,) + output if loss is not None else output
 
         return MoeCausalLMOutputWithPast(
