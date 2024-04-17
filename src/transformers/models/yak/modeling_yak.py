@@ -908,6 +908,7 @@ class YakMoE(nn.Module):
         deepspeed_quantization = kwargs.get(DEEPSPEED_QUANTIZATION_CONFIG)
         deepspeed_lora = kwargs.get(DEEPSPEED_LORA_CONFIG)
 
+        # HACK to test just the ds linear without turning on ds moe
         self.use_deepspeed_moe = False
 
         if not self.is_moe_layer: # dense, not MoE
