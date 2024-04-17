@@ -33,11 +33,11 @@ FLAIR is a powerful PyTorch NLP framework, convering several important tasks: NE
 
 Keywords: NLP, text embedding, document embedding, biomedical, NER, PoS, sentiment-analysis
 
-## [mindsdb](https://github.com/mindsdb/mindsdb)
+## [MindsDB](https://github.com/mindsdb/mindsdb)
 
-MindsDB is a low-code ML platform, which automates and integrates several ML frameworks into the data stack as "AI Tables" to streamline the integration of AI into applications, making it accessible to developers of all skill levels.
+MindsDB integrates with numerous [data sources](https://docs.mindsdb.com/integrations/data-overview), including databases, vector stores, applications and popular [AI/ML frameworks](https://docs.mindsdb.com/integrations/ai-overview), including AutoML and LLM. With MindsDB, you can connect any data source to any AI/ML model to implement and automate AI-powered applications. Deploy, serve, and fine-tune models in real-time, utilizing data from databases, vector stores, or applications. Do all that using universal tools developers already know.
 
-Keywords: Database, low-code, AI table
+Keywords: Database, LLMs, Large Language Models, Agents, Fine-tuning, RAG, Retrieval Augmented Generation, AI
 
 ## [langchain](https://github.com/hwchase17/langchain)
 
