@@ -1170,6 +1170,7 @@ else:
     _import_structure["models.xlm_prophetnet"].append("XLMProphetNetTokenizer")
     _import_structure["models.xlm_roberta"].append("XLMRobertaTokenizer")
     _import_structure["models.xlnet"].append("XLNetTokenizer")
+    _import_structure["models.yak"].append("YakTokenizer")
 
 # tokenizers-backed objects
 try:
@@ -3806,9 +3807,6 @@ else:
             "XmodPreTrainedModel",
         ]
     )
-    _import_structure["models.yak"].extend(
-        ["YakTokenizer"]
-     )
     _import_structure["models.yolos"].extend(
         [
             "YOLOS_PRETRAINED_MODEL_ARCHIVE_LIST",
@@ -6048,6 +6046,7 @@ if TYPE_CHECKING:
         from .models.xlm_prophetnet import XLMProphetNetTokenizer
         from .models.xlm_roberta import XLMRobertaTokenizer
         from .models.xlnet import XLNetTokenizer
+        from .models.yak import YakTokenizer
 
     try:
         if not is_tokenizers_available():
