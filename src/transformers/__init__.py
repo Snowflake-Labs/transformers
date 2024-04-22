@@ -146,6 +146,7 @@ _import_structure = {
         "AltCLIPTextConfig",
         "AltCLIPVisionConfig",
     ],
+    "models.arctic": ["ARCTIC_PRETRAINED_CONFIG_ARCHIVE_MAP", "ArcticConfig"],
     "models.audio_spectrogram_transformer": [
         "AUDIO_SPECTROGRAM_TRANSFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP",
         "ASTConfig",
@@ -1480,6 +1481,9 @@ else:
             "AltCLIPTextModel",
             "AltCLIPVisionModel",
         ]
+    )
+    _import_structure["models.arctic"].extend(
+        ["ArcticForCausalLM", "ArcticForSequenceClassification", "ArcticModel", "ArcticPreTrainedModel"]
     )
     _import_structure["models.audio_spectrogram_transformer"].extend(
         [
