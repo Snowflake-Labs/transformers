@@ -1,9 +1,14 @@
 """Tokenization classes for Yak."""
 
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from ...tokenization_utils_base import TextInput
 
 from ..llama import LlamaTokenizer
 
+
+SPIECE_UNDERLINE = "▁"
 
 class YakTokenizer(LlamaTokenizer):
 
@@ -41,6 +46,24 @@ class YakTokenizer(LlamaTokenizer):
             add_prefix_space=add_prefix_space,
             **kwargs,
         )
+
+    def tokenize(self, text: "TextInput", **kwargs) -> List[str]:
+        """
+        Converts a string to a list of tokens. If `self.legacy` is set to `False`, a prefix token is added unless the
+        first token is special.
+
+        This implementation is a hack to work around a bug in the Llama implementation, which does not
+        check the _additional_special_tokens field when determining whether to remove the SPIECE_UNDERLINE
+        prefix from the text before tokenization.
+        """
+        tokens = super().tokenize(text, **kwargs)
+
+        # if the second token is in _additional_special_tokens,
+        # then remove the extraneous SPIECE_UNDERLINE prefix added by the parent class
+        if len(tokens) >= 2 and tokens[0] == SPIECE_UNDERLINE and tokens[1] in self._additional_special_tokens:
+            tokens = tokens[1:]
+
+        return tokens
 
     @property
     def default_chat_template(self):
