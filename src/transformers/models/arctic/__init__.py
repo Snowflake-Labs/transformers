@@ -22,7 +22,7 @@ from ...utils import (
 
 
 _import_structure = {
-    "configuration_arctic": ["ARCTIC_PRETRAINED_CONFIG_ARCHIVE_MAP", "ArtcticConfig"],
+    "configuration_arctic": ["ARCTIC_PRETRAINED_CONFIG_ARCHIVE_MAP", "ArcticConfig"],
 }
 
 try:
