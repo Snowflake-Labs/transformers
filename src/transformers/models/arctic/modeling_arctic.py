@@ -354,7 +354,7 @@ class ArcticAttention(nn.Module):
                                      ds_optimized_quantization_config=quantization_config, 
                                      ds_optimized_base_weight_sharding=True,
                                      dtype=torch.bfloat16)
-        self.o_proj = get_arctic_linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False,
+        self.o_proj = get_arctic_linear(self.hidden_size, self.hidden_size, bias=False,
                                      use_deepspeed_implementation=self.use_deepspeed_implementation,
                                      ds_optimized_lora_config=deepspeed_lora_config, 
                                      ds_optimized_quantization_config=quantization_config, 
