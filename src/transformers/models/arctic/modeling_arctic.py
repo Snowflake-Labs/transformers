@@ -931,7 +931,7 @@ class ArcticMoE(nn.Module):
                               ds_optimized_lora_config=deepspeed_lora,
                               shard_base_weights_if_doing_lora=True)
         else:
-            if self.use_deepspeed_implementation: # DeepSpeed's MoE         
+            if self.use_deepspeed_implementation: # DeepSpeed's MoE
                 moe_expert_parallel_size = kwargs.get(MOE_EXPERT_PARALLEL_SIZE_ARG, 1)
                 self.mlp = MoE(self.hidden_dim,
                                 # base weight sharding false for all deepspeed moe calls because it is already sharded
@@ -1445,11 +1445,9 @@ class ArcticModel(ArcticPreTrainedModel):
 
 class ArcticForCausalLM(ArcticPreTrainedModel):
     # TODO(jeffra): update _keys_to_ignore_on_load_unexpected with expert keys not relevant for this rank
-    _keys_to_ignore_on_load_unexpected = [r"model\.layers\.\d+\.block_sparse_moe\.experts\.\d+\.w\d+\.weight"
-                                          r"model\.layers\.\d+\.block_sparse_moe\.gate\.weight"]
-    _keys_to_ignore_on_load_missing = [r"model\.layers\.\d+\.block_sparse_moe\.mlp\.deepspeed_moe\.experts\.deepspeed_experts\.\d+\.w\d+\.weight",
-                                       r"model\.layers\.\d+\.block_sparse_moe\.mlp\.deepspeed_moe\.gate\.wg\.weight"]
-    _tied_weights_keys = []#["lm_head.weight"]
+    _keys_to_ignore_on_load_unexpected = []
+    _keys_to_ignore_on_load_missing = []
+    _tied_weights_keys = []
 
     def __init__(self, config, **kwargs):
         super().__init__(config)
@@ -1487,8 +1485,8 @@ class ArcticForCausalLM(ArcticPreTrainedModel):
 
 
     def _expert_number_from_param_name(self, param_name):
-        # example param_name: model.layers.1.block_sparse_moe.experts.10.w1.weight
-        pattern = r'experts\.(\d+)\.'
+        # example ds param name: model.layers.9.block_sparse_moe.mlp.deepspeed_moe.experts.deepspeed_experts.62.w2.weight
+        pattern = r'deepspeed_experts\.(\d+)\.'
         m = re.search(pattern, param_name)
         if m:
             return int(m[1])
@@ -1497,67 +1495,68 @@ class ArcticForCausalLM(ArcticPreTrainedModel):
 
     def state_dict(self, *args, **kwargs):
         state_dict = super().state_dict(*args, **kwargs)
+        return state_dict
 
-        if not self.use_deepspeed_moe:
-            return state_dict
+        # if not self.use_deepspeed_moe:
+        #     return state_dict
 
-        # when trying to construct the deepspeed checkpoint we don't want to gather everything
-        if not getattr(self, '_gather_expert_params', False):
-            return state_dict
+        # # when trying to construct the deepspeed checkpoint we don't want to gather everything
+        # if not getattr(self, '_gather_expert_params', False):
+        #     return state_dict
 
-        rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
-        world_size = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
+        # rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+        # world_size = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
 
-        # non-lora experts
-        pattern = r"model\.layers\.\d+\.block_sparse_moe\.mlp\.deepspeed_moe\.experts\.deepspeed_experts\.\d+\.w\d+\.weight"
-        expert_params = [s for s in state_dict.keys() if re.search(pattern, s)]
+        # # non-lora experts
+        # pattern = r"model\.layers\.\d+\.block_sparse_moe\.mlp\.deepspeed_moe\.experts\.deepspeed_experts\.\d+\.w\d+\.weight"
+        # expert_params = [s for s in state_dict.keys() if re.search(pattern, s)]
 
-        for param_name in expert_params:
-            param_tensor = state_dict[param_name].to('cuda')
-            output = [torch.zeros_like(param_tensor) for _ in range(world_size)]
-            torch.distributed.gather(param_tensor, gather_list=output if rank == 0 else None, dst=0, group=None)
-            # rename from local rank to global rank
-            for gather_rank, gather_param in enumerate(output):
-                experts_per_rank = self.num_experts // self.moe_expert_parallel_size
-                new_expert_number = gather_rank * experts_per_rank + self._expert_number_from_param_name(param_name)
-                new_param_name = re.sub(r'(experts\.)(\d+)(\.)', rf'\g<1>{new_expert_number}\3', param_name)
-                state_dict[new_param_name] = gather_param
-                if rank == 0:
-                    print(f"adding to state_dict and renaming: {param_name} -> {new_param_name}")
+        # for param_name in expert_params:
+        #     param_tensor = state_dict[param_name].to('cuda')
+        #     output = [torch.zeros_like(param_tensor) for _ in range(world_size)]
+        #     torch.distributed.gather(param_tensor, gather_list=output if rank == 0 else None, dst=0, group=None)
+        #     # rename from local rank to global rank
+        #     for gather_rank, gather_param in enumerate(output):
+        #         experts_per_rank = self.num_experts // self.moe_expert_parallel_size
+        #         new_expert_number = gather_rank * experts_per_rank + self._expert_number_from_param_name(param_name)
+        #         new_param_name = re.sub(r'(experts\.)(\d+)(\.)', rf'\g<1>{new_expert_number}\3', param_name)
+        #         state_dict[new_param_name] = gather_param
+        #         if rank == 0:
+        #             print(f"adding to state_dict and renaming: {param_name} -> {new_param_name}")
     
-        # Handle custom LoRA implementation  
-        # TODO(rajhans): the part below is untested and shows up when doing lora training. Should not affect inference.
-        if self.is_deepspeed_lora:
-            for param_name in list(state_dict.keys()):  # Use list to avoid RuntimeError due to changing size during iteration  
-                if param_name.endswith("base_weight"):  
-                    base_weight = state_dict[param_name].to('cuda')
+        # # Handle custom LoRA implementation  
+        # # TODO(rajhans): the part below is untested and shows up when doing lora training. Should not affect inference.
+        # if self.is_deepspeed_lora:
+        #     for param_name in list(state_dict.keys()):  # Use list to avoid RuntimeError due to changing size during iteration  
+        #         if param_name.endswith("base_weight"):  
+        #             base_weight = state_dict[param_name].to('cuda')
                     
-                    # If the base weight is sharded, gather weights from multiple ranks and concatenate 
-                    # except if the weights are from deespeed_moe which is not sharded (due to EP). 
-                    if self.shard_base_weights_if_doing_lora and 'deepspeed_moe.experts.deepspeed_experts' not in param_name:
-                        gathered_weights = [torch.zeros_like(base_weight, 
-                                                             device=base_weight.device, dtype=base_weight.dtype) for _ in range(world_size)]
-                        torch.distributed.gather(base_weight, gather_list=gathered_weights if rank == 0 else None, dst=0, group=None)  
-                        base_weight = torch.cat(gathered_weights, dim=1)
+        #             # If the base weight is sharded, gather weights from multiple ranks and concatenate 
+        #             # except if the weights are from deespeed_moe which is not sharded (due to EP). 
+        #             if self.shard_base_weights_if_doing_lora and 'deepspeed_moe.experts.deepspeed_experts' not in param_name:
+        #                 gathered_weights = [torch.zeros_like(base_weight, 
+        #                                                      device=base_weight.device, dtype=base_weight.dtype) for _ in range(world_size)]
+        #                 torch.distributed.gather(base_weight, gather_list=gathered_weights if rank == 0 else None, dst=0, group=None)  
+        #                 base_weight = torch.cat(gathered_weights, dim=1)
 
 
-                    ## The part below is useful if we want to output HF transformer path weights, but commenting it for now 
-                    # Merge the LoRA weights into the base weights  
-                    # lora_weight_1 = state_dict.get(param_name.replace("base_weight", "lora_weight_1.weight"))  
-                    # lora_weight_2 = state_dict.get(param_name.replace("base_weight", "lora_weight_2.weight"))  
-                    # if lora_weight_1 is not None and lora_weight_2 is not None:
-                    #     lora_weights = torch.matmul(lora_weight_2, lora_weight_1)
-                    #     base_weight += lora_weights
-                    # else:
-                    #     raise ValueError                  
+        #             ## The part below is useful if we want to output HF transformer path weights, but commenting it for now 
+        #             # Merge the LoRA weights into the base weights  
+        #             # lora_weight_1 = state_dict.get(param_name.replace("base_weight", "lora_weight_1.weight"))  
+        #             # lora_weight_2 = state_dict.get(param_name.replace("base_weight", "lora_weight_2.weight"))  
+        #             # if lora_weight_1 is not None and lora_weight_2 is not None:
+        #             #     lora_weights = torch.matmul(lora_weight_2, lora_weight_1)
+        #             #     base_weight += lora_weights
+        #             # else:
+        #             #     raise ValueError                  
 
-                    # # Rename the base weight to weight  
-                    # new_param_name = param_name.replace("base_weight", "weight")  
-                    # state_dict[new_param_name] = base_weight  
+        #             # # Rename the base weight to weight  
+        #             # new_param_name = param_name.replace("base_weight", "weight")  
+        #             # state_dict[new_param_name] = base_weight  
                     
-                    # Remove the base weight from the state dict  
-                    # del state_dict[param_name]    
-        return state_dict      
+        #             # Remove the base weight from the state dict  
+        #             # del state_dict[param_name]    
+        # return state_dict      
 
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
@@ -1565,7 +1564,7 @@ class ArcticForCausalLM(ArcticPreTrainedModel):
             return super()._load_from_state_dict(
                 state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
             )
-
+        
         world_size = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
         #TODO(jeffra): currently assumes fine-tuning only on one node, fix for world_size != ep size
         if self.moe_expert_parallel_size > 1:
@@ -1576,18 +1575,8 @@ class ArcticForCausalLM(ArcticPreTrainedModel):
         num_local_experts = self.num_experts // self.moe_expert_parallel_size
         local_expert_range = range(num_local_experts * rank, num_local_experts * rank + num_local_experts)
 
-        # no deepspeed
-        #   model.layers.1.block_sparse_moe.experts.10.w1.weight
-        #   model.layers.1.block_sparse_moe.gate.weight
-        # w. deepspeed
-        #   model.layers.1.block_sparse_moe.mlp.deepspeed_moe.gate.wg.weight
-        #   model.layers.1.block_sparse_moe.mlp.deepspeed_moe.experts.deepspeed_experts.10.w1.weight
-
-        gate_pattern = r'model\.layers\.\d+\.block_sparse_moe\.gate\.weight'
-
         expert_params_to_keep = []
         expert_params_to_remove = []
-        gate_params = []
         for param_name in state_dict.keys():
             expert_number = self._expert_number_from_param_name(param_name)
             if expert_number is not None:
@@ -1595,8 +1584,6 @@ class ArcticForCausalLM(ArcticPreTrainedModel):
                     expert_params_to_keep.append(param_name)
                 else:
                     expert_params_to_remove.append(param_name)
-            elif re.search(gate_pattern, param_name):
-                gate_params.append(param_name)
 
         # drop all experts in the state_dict that we don't need locally
         for param_name in expert_params_to_remove:
@@ -1607,49 +1594,9 @@ class ArcticForCausalLM(ArcticPreTrainedModel):
         for param_name in expert_params_to_keep:
             # adjust expert number wrt expert parallelism
             new_expert_number = self._expert_number_from_param_name(param_name) % num_local_experts
-            new_param_name = re.sub(r'(experts\.)(\d+)(\.)', rf'\g<1>{new_expert_number}\3', param_name)
-
-            # use deepspeed moe param path
-            split_param_name = new_param_name.split('.')
-            idx = split_param_name.index('experts')
-            ds_moe_path = "mlp.deepspeed_moe.experts.deepspeed_experts".split('.')
-            new_param_name = split_param_name[0:idx] + ds_moe_path + split_param_name[idx+1:]
-            new_param_name = ".".join(new_param_name)
-
-            print(f'Deepspeed {rank=}, renaming {param_name} -> {new_param_name}')
+            new_param_name = re.sub(r'(deepspeed_experts\.)(\d+)(\.)', rf'\g<1>{new_expert_number}\3', param_name)
+            print(f'DeepSpeed {rank=}, adjusting expert number {param_name} -> {new_param_name}')
             state_dict[new_param_name] = state_dict.pop(param_name)
-
-        # rename gate params
-        ds_suffix = "mlp.deepspeed_moe.gate.wg.weight".split('.')
-        for param_name in gate_params:
-            new_param_name = '.'.join(param_name.split('.')[:4] + ds_suffix)
-            print(f'Gating: {rank=}, renaming {param_name} -> {new_param_name}')
-            state_dict[new_param_name] = state_dict.pop(param_name)
-
-        # If deepspeed lora is enabled, then we need to rename weight to base_weight.
-        # Furthermore, if the base_weight is sharded, we need to shard each weight and select the slice of local rank.
-        if self.is_deepspeed_lora:
-            local_state_dict = self.state_dict()
-            for param_name in local_state_dict:
-                if not param_name.endswith("base_weight"):
-                    continue
-
-                incoming_param_name = param_name.replace("base_weight", "weight")
-                if incoming_param_name not in state_dict:
-                    continue
-
-                incoming_param = state_dict[incoming_param_name]
-
-                shape_local = local_state_dict[param_name].shape
-                shape_incoming = incoming_param.shape
-                if 'deepspeed_moe' in incoming_param_name:
-                    assert shape_local == shape_incoming, "deepspeed moe weights are never sharded"
-                else:
-                    assert shape_incoming[1] == shape_local[1] * world_size, "weights should be sharded equally across world size"
-                    incoming_param = incoming_param[:, rank*shape_local[1]: (rank+1)*shape_local[1]]
-                print(f'Deepspeed lora: {rank=}, renaming {incoming_param_name} -> {param_name}')
-                state_dict[param_name] = incoming_param
-                del state_dict[incoming_param_name]
 
         return super()._load_from_state_dict(
             state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
