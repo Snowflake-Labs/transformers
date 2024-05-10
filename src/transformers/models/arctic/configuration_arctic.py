@@ -31,7 +31,6 @@ ARCTIC_PRETRAINED_CONFIG_ARCHIVE_MAP = {
 class ArcticLoraConfig:
     lora_r: int = 64
     lora_alpha: float = 16
-    shard_base_weights: bool = False
 
 
 @dataclass
@@ -152,7 +151,8 @@ class ArcticConfig(PretrainedConfig):
         enable_expert_tensor_parallelism=False,
         moe_min_capacity=0,
         moe_token_dropping=True,
-        quantization=None,
+        ds_quantization=None,
+        ds_lora=None,
         **kwargs,
     ):
         self.vocab_size = vocab_size
@@ -185,10 +185,16 @@ class ArcticConfig(PretrainedConfig):
         self.moe_min_capacity = moe_min_capacity
         self.moe_token_dropping = moe_token_dropping
         self.parallel_attn_mlp_res = parallel_attn_mlp_res
-        if isinstance(quantization, dict):
-            self.quantization = ArcticQuantizationConfig(**quantization)
+        if isinstance(ds_quantization, dict):
+            self.ds_quantization = ArcticQuantizationConfig(**ds_quantization)
         else:
-            self.quantization = quantization
+            self.ds_quantization = ds_quantization
+        
+        if isinstance(ds_lora, dict):
+            self.ds_lora = ArcticLoraConfig(**ds_lora)
+        else:
+            self.ds_lora = ds_lora
+
 
         super().__init__(
             pad_token_id=pad_token_id,
@@ -205,12 +211,16 @@ class ArcticConfig(PretrainedConfig):
             config = result[0]
         else:
             config = result
-        if isinstance(config.quantization, dict):
-            config.quantization = ArcticQuantizationConfig(**config.quantization)
+        if isinstance(config.ds_quantization, dict):
+            config.ds_quantization = ArcticQuantizationConfig(**config.ds_quantization)
+        if isinstance(config.ds_lora, dict):
+            config.ds_lora = ArcticLoraConfig(**config.ds_lora)
         return result
 
     def to_dict(self) -> Dict[str, Any]:
         ret = super().to_dict()
-        if isinstance(ret["quantization"], ArcticQuantizationConfig):
-            ret["quantization"] = asdict(ret["quantization"])
+        if isinstance(ret["ds_quantization"], ArcticQuantizationConfig):
+            ret["ds_quantization"] = asdict(ret["ds_quantization"])
+        if isinstance(ret["ds_lora"], ArcticLoraConfig):
+            ret["ds_lora"] = asdict(ret["ds_lora"])
         return ret
