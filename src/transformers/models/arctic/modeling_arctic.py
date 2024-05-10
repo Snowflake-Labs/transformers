@@ -89,9 +89,6 @@ logger = logging.get_logger(__name__)
 _CONFIG_FOR_DOC = "ArcticConfig"
 USE_DEEPSPEED_MOE_ARG = "use_deepspeed_moe_implementation"
 MOE_EXPERT_PARALLEL_SIZE_ARG = "moe_expert_parallel_size"
-DEEPSPEED_QUANTIZATION_CONFIG = "deepspeed_quantization"
-DEEPSPEED_LORA_CONFIG = "deepspeed_lora"
-QUANTIZATION_CONFIG = "ds_quantization_config"
 
 # REQUIRED_DEEPSPEED_VERSION = "deepspeed>0.14.5"
 # def is_deepspeed_valid_and_available(raise_error=False, error_msg=""):
@@ -332,9 +329,8 @@ class ArcticAttention(nn.Module):
                 f" and `num_heads`: {self.num_heads})."
             )
 
-        deepspeed_quantization = kwargs.get(DEEPSPEED_QUANTIZATION_CONFIG)
-        deepspeed_lora_config = kwargs.get(DEEPSPEED_LORA_CONFIG)
-        quantization_config = kwargs.get(QUANTIZATION_CONFIG, None)
+        deepspeed_lora_config = config.ds_lora
+        quantization_config = config.ds_quantization
 
         self.q_proj = get_arctic_linear(self.hidden_size, self.num_heads * self.head_dim, bias=False,
                                      use_deepspeed_implementation=self.use_deepspeed_implementation,
@@ -762,7 +758,7 @@ def get_arctic_linear(input_dim,
         ds_optimized_base_weight_sharding: bool. If true, the base weight for lora (provided ds_optimized_lora_config is not None) will be sharded across all available gpus
         in a tensor parallel way.
     """
-    if is_deepspeed_available():
+    if is_deepspeed_available() and use_deepspeed_implementation:
         if ds_optimized_lora_config is not None:
             ds_optimized_lora_config: ds_linear.LoRAConfig = copy.deepcopy(ds_optimized_lora_config)
             ds_optimized_lora_config.base_weight_sharding = torch.distributed.get_world_size() if ds_optimized_base_weight_sharding else 1
@@ -922,8 +918,8 @@ class ArcticMoE(nn.Module):
         self.use_deepspeed_implementation = USE_DEEPSPEED_MOE_ARG in kwargs and kwargs[USE_DEEPSPEED_MOE_ARG]
         if self.use_deepspeed_implementation and MoE is None:
             raise ValueError("Deepspeed is not installed")
-        quantization_config = kwargs.get(QUANTIZATION_CONFIG, None)
-        deepspeed_lora = kwargs.get(DEEPSPEED_LORA_CONFIG)
+        quantization_config = config.ds_quantization
+        deepspeed_lora = config.ds_lora
         if not self.is_moe_layer: # dense, not MoE
             self.mlp = ArcticMLP(config,
                               use_deepspeed_implementation=self.use_deepspeed_implementation,
@@ -958,9 +954,6 @@ class ArcticMoE(nn.Module):
                                                      ds_optimized_quantization_config=quantization_config,
                                                      ds_optimized_lora_config=deepspeed_lora,
                                                      shard_base_weights_if_doing_lora=True) for i in range(self.num_experts)])
-
-        # if torch.distributed.get_rank() == 0:
-        #     deepspeed.runtime.utils.see_memory_usage("", force=True)
 
 
     # Similar in behavior to transformers.models.mixtral.modeling_mixtral.MixtralSparseMoeBlock.forward but more efficient.
@@ -1040,8 +1033,8 @@ class ArcticDecoderLayer(nn.Module):
         self.use_deepspeed_implementation = USE_DEEPSPEED_MOE_ARG in kwargs and kwargs[USE_DEEPSPEED_MOE_ARG]
 
         self.parallel_attn_mlp_res = config.parallel_attn_mlp_res and self.block_sparse_moe.is_moe_layer # add residual only when it is moe layer
-        deepspeed_quantization = kwargs.get(DEEPSPEED_QUANTIZATION_CONFIG)
-        deepspeed_lora = kwargs.get(DEEPSPEED_LORA_CONFIG)
+        deepspeed_quantization = config.ds_quantization
+        deepspeed_lora = config.ds_lora
         if self.parallel_attn_mlp_res:
             self.residual_layernorm = ArcticRMSNorm(config.hidden_size, eps=config.rms_norm_eps) 
             self.residual_mlp =  ArcticMLP(config,
@@ -1459,7 +1452,7 @@ class ArcticForCausalLM(ArcticPreTrainedModel):
         self.num_experts_per_tok = config.num_experts_per_tok
         self.use_deepspeed_moe = kwargs.get(USE_DEEPSPEED_MOE_ARG, False)
         self.moe_expert_parallel_size = kwargs.get(MOE_EXPERT_PARALLEL_SIZE_ARG, 1)
-        self.is_deepspeed_lora = kwargs.get(DEEPSPEED_LORA_CONFIG) is not None
+        self.is_deepspeed_lora = config.ds_lora is not None
         self.gradient_checkpointing = True
         # self.shard_base_weights_if_doing_lora = kwargs.get("shard_base_weights_if_doing_lora", False)
         # Initialize weights and apply final processing
