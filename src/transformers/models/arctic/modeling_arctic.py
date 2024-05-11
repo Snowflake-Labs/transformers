@@ -1038,11 +1038,11 @@ class ArcticDecoderLayer(nn.Module):
         if self.parallel_attn_mlp_res:
             self.residual_layernorm = ArcticRMSNorm(config.hidden_size, eps=config.rms_norm_eps) 
             self.residual_mlp =  ArcticMLP(config,
-                                        use_deepspeed_implementation=self.use_deepspeed_implementation,
-                                        is_residual_mlp=True,
-                                        ds_optimized_quantization_config=deepspeed_quantization,
-                                        ds_optimized_lora_config=deepspeed_lora,
-                                        shard_base_weights_if_doing_lora=False) # for the residual layer. always shard the base weight if doing deepspeed lora.
+                                           use_deepspeed_implementation=self.use_deepspeed_implementation,
+                                           is_residual_mlp=True,
+                                           ds_optimized_quantization_config=deepspeed_quantization,
+                                           ds_optimized_lora_config=deepspeed_lora,
+                                           shard_base_weights_if_doing_lora=True) # for the residual layer. always shard the base weight if doing deepspeed lora.
 
     def forward(
         self,
