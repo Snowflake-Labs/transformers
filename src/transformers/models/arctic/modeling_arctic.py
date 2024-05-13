@@ -1487,7 +1487,8 @@ class ArcticForCausalLM(ArcticPreTrainedModel):
 
     def is_lora_param(self, param_name):
         patterns = [r'model\.layers\.\d+\.block_sparse_moe\.mlp\.w(1|2|3)\.weight', 
-                    r"model\.layers\.\d+\.self_attn\.(q|k|v|o)_proj\.weight"]
+                    r"model\.layers\.\d+\.self_attn\.(q|k|v|o)_proj\.weight",
+                    r"model\.layers\.\d+\.residual_mlp\.w(1|2|3)\.weight"]
         for pattern in patterns:
             if re.search(pattern, param_name):
                 return True
