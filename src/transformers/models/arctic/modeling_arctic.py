@@ -26,7 +26,6 @@ import warnings
 import re
 from typing import List, Optional, Tuple, Union
 
-import deepspeed
 import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
@@ -60,6 +59,7 @@ from transformers.integrations.deepspeed import is_deepspeed_available
 from transformers.utils.versions import require_version
 
 if is_deepspeed_available():
+    import deepspeed
     from deepspeed.moe.layer import MoE 
     # Note that below will crash if there is an available deepspeed that does not have ds_linear.
     try:
