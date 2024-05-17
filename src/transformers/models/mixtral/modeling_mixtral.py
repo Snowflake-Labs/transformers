@@ -831,7 +831,7 @@ class MixtralSparseMoeBlock(nn.Module):
         self.ffn_dim = config.intermediate_size
         self.num_experts = config.num_local_experts
         self.top_k = config.num_experts_per_tok
-
+        self.normalize_router_weights = config.normalize_router_weights
         # gating
         self.gate = nn.Linear(self.hidden_dim, self.num_experts, bias=False)
 
