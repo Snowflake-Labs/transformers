@@ -831,7 +831,7 @@ class MixtralSparseMoeBlock(nn.Module):
         self.ffn_dim = config.intermediate_size
         self.num_experts = config.num_local_experts
         self.top_k = config.num_experts_per_tok
-
+        self.normalize_router_weights = config.normalize_router_weights
         # gating
         self.gate = nn.Linear(self.hidden_dim, self.num_experts, bias=False)
 
@@ -851,7 +851,8 @@ class MixtralSparseMoeBlock(nn.Module):
 
         routing_weights = F.softmax(router_logits, dim=1, dtype=torch.float)
         routing_weights, selected_experts = torch.topk(routing_weights, self.top_k, dim=-1)
-        routing_weights /= routing_weights.sum(dim=-1, keepdim=True)
+        if self.normalize_router_weights:
+            routing_weights /= routing_weights.sum(dim=-1, keepdim=True)
         # we cast back to the input dtype
         routing_weights = routing_weights.to(hidden_states.dtype)
 
