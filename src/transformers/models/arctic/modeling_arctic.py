@@ -924,7 +924,7 @@ class ArcticMoE(nn.Module):
         deepspeed_lora = config.ds_lora
         if not self.is_moe_layer: # dense, not MoE
             self.mlp = ArcticMLP(config,
-                              use_deepspeed_implementation=self.use_deepspeed_linear_implementation,
+                              use_deepspeed_linear_implementation=self.use_deepspeed_linear_implementation,
                               ds_optimized_quantization_config=quantization_config,
                               ds_optimized_lora_config=deepspeed_lora,
                               shard_base_weights_if_doing_lora=True)
