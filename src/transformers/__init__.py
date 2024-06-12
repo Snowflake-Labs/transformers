@@ -618,6 +618,7 @@ _import_structure = {
     ],
     "models.mistral": ["MISTRAL_PRETRAINED_CONFIG_ARCHIVE_MAP", "MistralConfig"],
     "models.mixtral": ["MIXTRAL_PRETRAINED_CONFIG_ARCHIVE_MAP", "MixtralConfig"],
+    "models.yak": ["YAK_PRETRAINED_CONFIG_ARCHIVE_MAP", "YakConfig"],
     "models.mluke": [],
     "models.mobilebert": [
         "MOBILEBERT_PRETRAINED_CONFIG_ARCHIVE_MAP",
@@ -1184,6 +1185,7 @@ else:
     _import_structure["models.xlm_prophetnet"].append("XLMProphetNetTokenizer")
     _import_structure["models.xlm_roberta"].append("XLMRobertaTokenizer")
     _import_structure["models.xlnet"].append("XLNetTokenizer")
+    _import_structure["models.yak"].append("YakTokenizer")
 
 # tokenizers-backed objects
 try:
@@ -5951,6 +5953,7 @@ if TYPE_CHECKING:
     )
     from .models.xlnet import XLNET_PRETRAINED_CONFIG_ARCHIVE_MAP, XLNetConfig
     from .models.xmod import XMOD_PRETRAINED_CONFIG_ARCHIVE_MAP, XmodConfig
+    from .models.yak import YAK_PRETRAINED_CONFIG_ARCHIVE_MAP, YakConfig
     from .models.yolos import YOLOS_PRETRAINED_CONFIG_ARCHIVE_MAP, YolosConfig
     from .models.yoso import YOSO_PRETRAINED_CONFIG_ARCHIVE_MAP, YosoConfig
 
@@ -6141,6 +6144,7 @@ if TYPE_CHECKING:
         from .models.xlm_prophetnet import XLMProphetNetTokenizer
         from .models.xlm_roberta import XLMRobertaTokenizer
         from .models.xlnet import XLNetTokenizer
+        from .models.yak import YakTokenizer
 
     try:
         if not is_tokenizers_available():

@@ -510,6 +510,13 @@ else:
                 ),
             ),
             (
+                "yak",
+                 (
+                    "YakTokenizer" if is_sentencepiece_available() else None,
+                    "YakTokenizerFast" if is_tokenizers_available() else None,
+                 ),
+            ),
+            (
                 "yoso",
                 (
                     "AlbertTokenizer" if is_sentencepiece_available() else None,
