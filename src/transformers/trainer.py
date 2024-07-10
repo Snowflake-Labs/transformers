@@ -2007,7 +2007,7 @@ class Trainer:
             weights = torch.arange(rows * cols).reshape(rows, cols).to(matrix.device)
             return torch.sum(matrix * weights).item(), torch.sum(matrix).item(), matrix.dtype, matrix.device
 
-        parameters = model.named_parameters()
+        parameters = dict(self.model.named_parameters())
         param_name="model.layers.1.self_attn.v_proj.weight"
         print(f"Line 2012 rank={torch.distributed.get_rank()}, {param_name}. Weighted sum {weighted_sum(parameters[param_name])}")
         
@@ -2025,12 +2025,12 @@ class Trainer:
                     self.model, self.optimizer, self.lr_scheduler
                 )
 
-        parameters = model.named_parameters()
-        param_name="model.layers.1.self_attn.v_proj.weight"
-        print(f"line 2030 rank={torch.distributed.get_rank()}, {param_name}. Weighted sum {weighted_sum(parameters[param_name])}")
-
         if self.is_fsdp_enabled:
             self.model = self.model_wrapped = model
+
+        parameters = dict(model.named_parameters())
+        param_name="module.model.layers.1.self_attn.v_proj.weight"
+        print(f"line 2030 rank={torch.distributed.get_rank()}, {param_name}. Weighted sum {weighted_sum(parameters[param_name].dequantized())}")
 
         # for the rest of this function `model` is the outside model, whether it was wrapped or not
         if model is not self.model:
