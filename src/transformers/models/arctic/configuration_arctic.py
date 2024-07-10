@@ -31,6 +31,7 @@ ARCTIC_PRETRAINED_CONFIG_ARCHIVE_MAP = {
 class ArcticLoraConfig:
     lora_r: int = 64
     lora_alpha: float = 16
+    base_weight_sharding: int = 8
 
 
 @dataclass
