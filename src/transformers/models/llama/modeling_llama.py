@@ -19,10 +19,12 @@
 # limitations under the License.
 """PyTorch LLaMA model."""
 
+import deepspeed
 import math
 import warnings
 from typing import List, Optional, Tuple, Union
 
+import re
 import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
@@ -60,6 +62,25 @@ logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "LlamaConfig"
 
+import deepspeed.linear
+from deepspeed.linear import OptimizedLinear, LoRAConfig, QuantizationConfig
+from deepspeed.runtime.utils import see_memory_usage
+
+
+def ds_linear(dimA, dimB, bias=False, ds_lora=False):
+    if ds_lora:
+        lora_config = LoRAConfig(lora_r=8, lora_alpha=64, base_weight_sharding=16, offload=True, offload_ratio=0.20)
+        quant_config = QuantizationConfig(q_bits=8)
+        return OptimizedLinear(
+            input_dim=dimA,
+            output_dim=dimB,
+            bias=bias,
+            lora_config=lora_config,
+            quantization_config=quant_config
+        )
+    else:
+        return nn.Linear(dimA, dimB, bias=bias)
+
 
 def _get_unpad_data(attention_mask):
     seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
@@ -93,6 +114,31 @@ class LlamaRMSNorm(nn.Module):
 ALL_LAYERNORM_LAYERS.append(LlamaRMSNorm)
 
 
+def apply_scaling(freqs: torch.Tensor):
+    # Values obtained from grid search
+    scale_factor = 8
+    low_freq_factor = 1
+    high_freq_factor = 4
+    old_context_len = 8192  # original llama3 length
+
+    low_freq_wavelen = old_context_len / low_freq_factor
+    high_freq_wavelen = old_context_len / high_freq_factor
+    new_freqs = []
+    for freq in freqs:
+        wavelen = 2 * math.pi / freq
+        if wavelen < high_freq_wavelen:
+            new_freqs.append(freq)
+        elif wavelen > low_freq_wavelen:
+            new_freqs.append(freq / scale_factor)
+        else:
+            assert low_freq_wavelen != high_freq_wavelen
+            smooth = (old_context_len / wavelen - low_freq_factor) / (
+                high_freq_factor - low_freq_factor
+            )
+            new_freqs.append((1 - smooth) * freq / scale_factor + smooth * freq)
+    return torch.tensor(new_freqs, dtype=freqs.dtype, device=freqs.device)
+
+
 class LlamaRotaryEmbedding(nn.Module):
     def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None, scaling_factor=1.0):
         super().__init__()
@@ -101,6 +147,7 @@ class LlamaRotaryEmbedding(nn.Module):
         self.max_position_embeddings = max_position_embeddings
         self.base = base
         inv_freq = 1.0 / (self.base ** (torch.arange(0, self.dim, 2, dtype=torch.int64).float().to(device) / self.dim))
+        inv_freq = apply_scaling(inv_freq)
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         # For BC we register cos and sin cached
         self.max_seq_len_cached = max_position_embeddings
@@ -209,14 +256,14 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
 
 
 class LlamaMLP(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, ds_lora=False):
         super().__init__()
         self.config = config
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.intermediate_size
-        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
-        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
-        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=False)
+        self.gate_proj = ds_linear(self.hidden_size, self.intermediate_size, bias=False, ds_lora=ds_lora)
+        self.up_proj = ds_linear(self.hidden_size, self.intermediate_size, bias=False, ds_lora=ds_lora)
+        self.down_proj = ds_linear(self.intermediate_size, self.hidden_size, bias=False, ds_lora=ds_lora)
         self.act_fn = ACT2FN[config.hidden_act]
 
     def forward(self, x):
@@ -257,7 +304,7 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
 class LlamaAttention(nn.Module):
     """Multi-headed attention from 'Attention Is All You Need' paper"""
 
-    def __init__(self, config: LlamaConfig, layer_idx: Optional[int] = None):
+    def __init__(self, config: LlamaConfig, layer_idx: Optional[int] = None, ds_lora=False):
         super().__init__()
         self.config = config
         self.layer_idx = layer_idx
@@ -284,10 +331,10 @@ class LlamaAttention(nn.Module):
                 f" and `num_heads`: {self.num_heads})."
             )
 
-        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=config.attention_bias)
-        self.k_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=config.attention_bias)
-        self.v_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=config.attention_bias)
-        self.o_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=config.attention_bias)
+        self.q_proj = ds_linear(self.hidden_size, self.num_heads * self.head_dim, bias=config.attention_bias, ds_lora=ds_lora)
+        self.k_proj = ds_linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=config.attention_bias, ds_lora=ds_lora)
+        self.v_proj = ds_linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=config.attention_bias, ds_lora=ds_lora)
+        self.o_proj = ds_linear(self.hidden_size, self.hidden_size, bias=config.attention_bias, ds_lora=ds_lora)
         self._init_rope()
 
     def _init_rope(self):
@@ -691,13 +738,13 @@ LLAMA_ATTENTION_CLASSES = {
 
 
 class LlamaDecoderLayer(nn.Module):
-    def __init__(self, config: LlamaConfig, layer_idx: int):
+    def __init__(self, config: LlamaConfig, layer_idx: int, ds_lora=False):
         super().__init__()
         self.hidden_size = config.hidden_size
 
-        self.self_attn = LLAMA_ATTENTION_CLASSES[config._attn_implementation](config=config, layer_idx=layer_idx)
+        self.self_attn = LLAMA_ATTENTION_CLASSES[config._attn_implementation](config=config, layer_idx=layer_idx, ds_lora=ds_lora)
 
-        self.mlp = LlamaMLP(config)
+        self.mlp = LlamaMLP(config, ds_lora)
         self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
@@ -915,14 +962,14 @@ class LlamaModel(LlamaPreTrainedModel):
         config: LlamaConfig
     """
 
-    def __init__(self, config: LlamaConfig):
+    def __init__(self, config: LlamaConfig, ds_lora=False):
         super().__init__(config)
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
 
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
         self.layers = nn.ModuleList(
-            [LlamaDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
+            [LlamaDecoderLayer(config, layer_idx, ds_lora) for layer_idx in range(config.num_hidden_layers)]
         )
         self.norm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.gradient_checkpointing = False
@@ -956,6 +1003,8 @@ class LlamaModel(LlamaPreTrainedModel):
         )
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        see_memory_usage('pre forward', force=True)
 
         if (input_ids is None) ^ (inputs_embeds is not None):
             raise ValueError(
@@ -1042,6 +1091,8 @@ class LlamaModel(LlamaPreTrainedModel):
             next_cache = (
                 next_decoder_cache.to_legacy_cache() if isinstance(next_decoder_cache, Cache) else next_decoder_cache
             )
+
+        #see_memory_usage('post forward', force=True)
         if not return_dict:
             return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
         return BaseModelOutputWithPast(
@@ -1118,12 +1169,12 @@ class LlamaModel(LlamaPreTrainedModel):
 class LlamaForCausalLM(LlamaPreTrainedModel):
     _tied_weights_keys = ["lm_head.weight"]
 
-    def __init__(self, config):
+    def __init__(self, config, deepspeed_lora=False):
         super().__init__(config)
-        self.model = LlamaModel(config)
+        self.deepspeed_lora = deepspeed_lora
+        self.model = LlamaModel(config, ds_lora)
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -1144,6 +1195,39 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
 
     def get_decoder(self):
         return self.model
+
+    def sharded_param(self, param_name):
+        patterns = [r'model\.layers\.(\d+)\.self_attn\.[qkvo]_proj\.weight', 
+                    r'model\.layers\.(\d+)\.mlp\.(gate|up|down)_proj\.weight']
+        for pattern in patterns:
+            match = re.match(pattern, param_name)
+            if match:
+                return True
+        return False
+
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
+        if not self.deepspeed_lora:
+            return super()._load_from_state_dict(
+                state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
+            )
+        world_size = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
+        rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+
+        local_state_dict = self.state_dict()
+        for param_name in local_state_dict:
+            if self.sharded_param(param_name):
+                if param_name not in state_dict:
+                    continue
+                shape_local = local_state_dict[param_name].shape
+                incoming_param = state_dict[param_name]
+                print(f'{rank=} {param_name} {shape_local=} {incoming_param.shape=}')
+                incoming_param = incoming_param[:, rank*shape_local[1]: (rank+1)*shape_local[1]]
+                state_dict[param_name] = incoming_param
+                del state_dict[param_name]
+
+        return super()._load_from_state_dict(
+            state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
+        )
 
     @add_start_docstrings_to_model_forward(LLAMA_INPUTS_DOCSTRING)
     @replace_return_docstrings(output_type=CausalLMOutputWithPast, config_class=_CONFIG_FOR_DOC)
