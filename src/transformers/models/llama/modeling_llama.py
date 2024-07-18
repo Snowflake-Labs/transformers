@@ -1210,7 +1210,6 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
             return super()._load_from_state_dict(
                 state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
             )
-        world_size = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
         rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
 
         local_state_dict = self.state_dict()
@@ -1220,11 +1219,11 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
                     continue
                 shape_local = local_state_dict[param_name].shape
                 incoming_param = state_dict[param_name]
-                print(f'{rank=} {param_name} {shape_local=} {incoming_param.shape=}')
+                # print(f'{rank=} {param_name} {shape_local=} {incoming_param.shape=}')
                 incoming_param = incoming_param[:, rank*shape_local[1]: (rank+1)*shape_local[1]]
+                # print(f'{rank=} {param_name} {incoming_param.shape=} {incoming_param.norm().item()=}')
                 state_dict[param_name] = incoming_param
-                del state_dict[param_name]
-
+        
         return super()._load_from_state_dict(
             state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
         )
