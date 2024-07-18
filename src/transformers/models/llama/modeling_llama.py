@@ -1217,12 +1217,9 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
             if self.sharded_param(param_name):
                 if param_name not in state_dict:
                     continue
-                shape_local = local_state_dict[param_name].shape
+                shape_local = local_state_dict[param_name].shape[0]
                 incoming_param = state_dict[param_name]
-                # print(f'{rank=} {param_name} {shape_local=} {incoming_param.shape=}')
-                incoming_param = incoming_param[:, rank*shape_local[1]: (rank+1)*shape_local[1]]
-                # print(f'{rank=} {param_name} {incoming_param.shape=} {incoming_param.norm().item()=}')
-                state_dict[param_name] = incoming_param
+                state_dict[param_name] = incoming_param.flatten().narrow(0, rank * shape_local, shape_local)
         
         return super()._load_from_state_dict(
             state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
