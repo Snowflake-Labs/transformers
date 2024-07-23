@@ -1101,7 +1101,7 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
             config.ds_lora_config = asdict(ds_lora_config)
         if ds_quant_config:
             config.ds_quant_config = asdict(ds_quant_config)
-        print(f"deepspeed lora_config: {config.ds_lora_config}, quant_config: {config.ds_quant_config}")
+        print(f"deepspeed lora_config: {ds_lora_config}, quant_config: {ds_quant_config}")
 
         self.model = LlamaModel(config)
         self.vocab_size = config.vocab_size
