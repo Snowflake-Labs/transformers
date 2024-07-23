@@ -96,31 +96,6 @@ class LlamaRMSNorm(nn.Module):
 ALL_LAYERNORM_LAYERS.append(LlamaRMSNorm)
 
 
-def apply_scaling(freqs: torch.Tensor):
-    # Values obtained from grid search
-    scale_factor = 8
-    low_freq_factor = 1
-    high_freq_factor = 4
-    old_context_len = 8192  # original llama3 length
-
-    low_freq_wavelen = old_context_len / low_freq_factor
-    high_freq_wavelen = old_context_len / high_freq_factor
-    new_freqs = []
-    for freq in freqs:
-        wavelen = 2 * math.pi / freq
-        if wavelen < high_freq_wavelen:
-            new_freqs.append(freq)
-        elif wavelen > low_freq_wavelen:
-            new_freqs.append(freq / scale_factor)
-        else:
-            assert low_freq_wavelen != high_freq_wavelen
-            smooth = (old_context_len / wavelen - low_freq_factor) / (
-                high_freq_factor - low_freq_factor
-            )
-            new_freqs.append((1 - smooth) * freq / scale_factor + smooth * freq)
-    return torch.tensor(new_freqs, dtype=freqs.dtype, device=freqs.device)
-
-
 class LlamaRotaryEmbedding(nn.Module):
     def __init__(
         self,
