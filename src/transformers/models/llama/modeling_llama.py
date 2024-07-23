@@ -65,7 +65,6 @@ _CONFIG_FOR_DOC = "LlamaConfig"
 
 import deepspeed.linear
 from deepspeed.linear import OptimizedLinear, LoRAConfig, QuantizationConfig
-from deepspeed.runtime.utils import see_memory_usage
 
 
 def ds_linear(dimA: int, dimB: int, bias: bool=False, lora_config: dict=None, quant_config: dict=None):
@@ -1013,8 +1012,6 @@ class LlamaModel(LlamaPreTrainedModel):
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        see_memory_usage('pre forward', force=True)
-
         if (input_ids is None) ^ (inputs_embeds is not None):
             raise ValueError(
                 "You cannot specify both input_ids and inputs_embeds at the same time, and must specify either one"
@@ -1101,7 +1098,6 @@ class LlamaModel(LlamaPreTrainedModel):
                 next_decoder_cache.to_legacy_cache() if isinstance(next_decoder_cache, Cache) else next_decoder_cache
             )
 
-        #see_memory_usage('post forward', force=True)
         if not return_dict:
             return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
         return BaseModelOutputWithPast(
