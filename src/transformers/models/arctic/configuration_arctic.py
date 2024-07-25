@@ -141,6 +141,7 @@ class ArcticConfig(PretrainedConfig):
         tie_word_embeddings=False,
         rope_theta=1e6,
         sliding_window=None,
+        sink_size=None,
         attention_dropout=0.0,
         num_experts_per_tok=1,
         num_local_experts=8,
@@ -162,6 +163,7 @@ class ArcticConfig(PretrainedConfig):
         self.num_hidden_layers = num_hidden_layers
         self.num_attention_heads = num_attention_heads
         self.sliding_window = sliding_window
+        self.sink_size = sink_size
 
         # for backward compatibility
         if num_key_value_heads is None:
