@@ -500,6 +500,13 @@ else:
                 ),
             ),
             (
+                "arctic",
+                 (
+                    "ArcticTokenizer" if is_sentencepiece_available() else None,
+                    "ArcticTokenizerFast" if is_tokenizers_available() else None,
+                 ),
+            ),            
+            (
                 "yoso",
                 (
                     "AlbertTokenizer" if is_sentencepiece_available() else None,

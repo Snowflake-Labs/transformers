@@ -279,6 +279,7 @@ CONFIG_MAPPING_NAMES = OrderedDict(
         ("xlm-roberta-xl", "XLMRobertaXLConfig"),
         ("xlnet", "XLNetConfig"),
         ("xmod", "XmodConfig"),
+        ("arctic", "ArcticConfig"),
         ("yolos", "YolosConfig"),
         ("yoso", "YosoConfig"),
     ]
@@ -563,6 +564,7 @@ MODEL_NAMES_MAPPING = OrderedDict(
         ("xls_r", "XLS-R"),
         ("xlsr_wav2vec2", "XLSR-Wav2Vec2"),
         ("xmod", "X-MOD"),
+        ("arctic", "Arctic"),
         ("yolos", "YOLOS"),
         ("yoso", "YOSO"),
     ]
