@@ -22,10 +22,6 @@ from transformers.utils import logging
 
 logger = logging.get_logger(__name__)
 
-ARCTIC_PRETRAINED_CONFIG_ARCHIVE_MAP = {
-    "arctic": "https://huggingface.co/Snowflake/snowflake-arctic-instruct/tree/main/config.json",
-}
-
 
 @dataclass
 class ArcticLoraConfig:

@@ -22,7 +22,7 @@ from ...utils import (
 
 
 _import_structure = {
-    "configuration_arctic": ["ARCTIC_PRETRAINED_CONFIG_ARCHIVE_MAP", "ArcticConfig"],
+    "configuration_arctic": ["ArcticConfig"],
 }
 
 try:
@@ -48,7 +48,7 @@ else:
 
 
 if TYPE_CHECKING:
-    from .configuration_arctic import ARCTIC_PRETRAINED_CONFIG_ARCHIVE_MAP, ArcticConfig
+    from .configuration_arctic import ArcticConfig
 
     try:
         if not is_sentencepiece_available():
